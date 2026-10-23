@@ -31,8 +31,31 @@ async function openFile(path){let {data,error}=await db.storage.from('study-file
 async function upload(){if(!profile||!subject)return;let f=$('file').files[0],title=$('resourceTitle').value.trim(),cat=$('category').value;if(title.length<3||!f)return toast('أدخلي عنوانًا واختاري ملفًا');let ext=f.name.split('.').pop().toLowerCase();let types={pdf:'application/pdf',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp'};if(!types[ext]||f.type!==types[ext]||f.size>10*1024*1024)return toast('الملف يجب أن يكون PDF أو صورة بحجم أقل من 10 MB');$('uploadFile').disabled=true;let path=user.id+'/'+crypto.randomUUID()+'.'+ext;try{let up=await db.storage.from('study-files').upload(path,f,{contentType:f.type,upsert:false});if(up.error)throw up.error;let ins=await db.from('resources').insert({uploader:user.id,school_year:profile.school_year,section:profile.section,subject,category:cat,title,storage_path:path,mime_type:f.type});if(ins.error)throw ins.error;toast('تم رفع الملف، وهو الآن في انتظار مراجعة الإدارة.');$('resourceTitle').value='';$('file').value='';$('uploadPanel').classList.add('hidden');loadResources()}catch(e){err(e)}finally{$('uploadFile').disabled=false}}
 async function loadPending(){let {data,error}=await db.from('resources').select('id,title,subject,school_year,section,storage_path').eq('status','pending').order('created_at',{ascending:true}).limit(100);if(error)return err(error);$('pending').replaceChildren();for(const r of data||[]){let d=document.createElement('div');d.className='card';let p=document.createElement('p');p.textContent=r.title+' — '+r.school_year+' / '+r.section+' / '+subjectLabel(r.subject);let view=document.createElement('button');view.className='secondary';view.textContent='معاينة';view.onclick=()=>openFile(r.storage_path);let approve=document.createElement('button');approve.textContent='قبول';approve.onclick=()=>review(r.id,'approved');let reject=document.createElement('button');reject.className='danger';reject.textContent='رفض';reject.onclick=()=>review(r.id,'rejected');d.append(p,view,' ',approve,' ',reject);$('pending').append(d)}if(!(data||[]).length)$('pending').textContent='لا توجد ملفات للمراجعة.'}
 async function review(id,status){let {error}=await db.from('resources').update({status}).eq('id',id);if(error)return err(error);loadPending();loadResources()}
-$('startBtn').onclick=$('authBtn').onclick=()=>show(user?(profile?'dashboard':'profile'):'auth');$('signIn').onclick=async()=>{if(!db)return toast('أكملي إعداد Supabase');let {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)err(error);else load()};$('signUp').onclick=async()=>{if(!db)return toast('أكملي إعداد Supabase');let {error}=await db.auth.signUp({email:$('email').value.trim(),password:$('password').value,emailRedirectTo:location.origin+location.pathname});if(error)err(error);else toast('تم إرسال رسالة التأكيد إن كانت مطلوبة. افحصي بريدك الإلكتروني.')};$('google').onclick=async()=>{if(!db)return toast('أكملي إعداد Supabase');let {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});if(error)err(error)};$('logoutBtn').onclick=async()=>{await db.auth.signOut();load()};
-$('saveProfile').onclick=async()=>{let y=$('year').value,s=y==='1ere'?'general':$('section').value,o=['3eme','4eme'].includes(y)?$('option').value:null,n=$('name').value.trim();if(n.length<2||!y||!s||(['3eme','4eme'].includes(y)&&!o))return toast('أكملي جميع الحقول');$('saveProfile').disabled=true;let {error}=await db.from('profiles').insert({id:user.id,display_name:n,school_year:y,section:s,optional_language:o});$('saveProfile').disabled=false;if(error)err(error);else load()};
-$('showUpload').onclick=()=>$('uploadPanel').classList.toggle('hidden');$('uploadFile').onclick=upload;$('categoryFilter').onchange=loadResources;$('search').oninput=loadResources;$('langBtn').onclick=()=>setLang(lang==='ar'?'fr':'ar');$('promotionBtn').onclick=()=>$('promotionPanel').classList.toggle('hidden');$('submitPromotion').onclick=async()=>{let passed=$('passed').checked;let y=profile.school_year;let next=y==='1ere'?'2eme':y==='2eme'?'3eme':y==='3eme'?'4eme':null;if(passed&&!next)return toast('هذه آخر سنة');let s=passed?$('nextSection').value:null,o=passed&&['3eme','4eme'].includes(next)?$('nextOption').value:null;if(passed&&(!s||(['3eme','4eme'].includes(next)&&!o)))return toast('اختاري الشعبة والمادة الاختيارية');if(!confirm('تأكيد النتيجة؟'))return;let {error}=await db.rpc('promote_self',{p_passed:passed,p_section:s,p_option:o});if(error)err(error);else{toast('تم حفظ النتيجة');load()}};$('saveSettings').onclick=async()=>{let {error}=await db.from('settings').update({promotion_open:$('promotionOpen').checked}).eq('id',1);if(error)err(error);else{toast('تم الحفظ');load()}};
-initSelects();if(db){db.auth.onAuthStateChange(()=>{setTimeout(load,0)});load()}else toast('يجب إدخال إعدادات Supabase في الكود.');
-</script></body></html>
+$('startBtn').onclick=$('authBtn').onclick=()=>show(user?(profile?'dashboard':'profile'):'auth');$('signIn').onclick=async()=>{if(!db)return toast('أكملي إعداد Supabase');let {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)err(error);else load()};$('signUp').onclick = async () => {
+  if (!db) return toast('أكملي إعداد Supabase');
+
+  const email = $('email').value.trim();
+  const password = $('password').value;
+
+  if (!email || !password) {
+    return toast('أدخلي البريد الإلكتروني وكلمة المرور أولًا');
+  }
+
+  if (!email.includes('@')) {
+    return toast('تحققي من البريد الإلكتروني');
+  }
+
+  const { error } = await db.auth.signUp({
+    email: email,
+    password: password,
+    options: {
+      emailRedirectTo: location.origin + location.pathname
+    }
+  });
+
+  if (error) {
+    err(error);
+  } else {
+    toast('تم إرسال رسالة التأكيد إن كانت مطلوبة. افحصي بريدك الإلكتروني.');
+  }
+};
